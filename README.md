@@ -22,7 +22,7 @@ Claude ──OAuth (GitHub sign-in, only you)──▶ Worker /mcp ──Bearer 
 - Your Garmin **personal API key** is a Worker secret. The Worker swaps it for a 24-hour access
   token, caches it in KV, and refreshes it an hour before it expires.
 - **`/mcp` is locked.** Claude has to sign in through OAuth, which sends you to GitHub, and only the
-  GitHub account in `ALLOWED_GITHUB_LOGIN` gets through.
+  GitHub account in `ALLOWED_GITHUB_LOGIN` gets through. If it isn't set, nobody does.
 - **Read-only.** Every tool is a `GET`. Names, profile photos and GPS coordinates are stripped from
   responses before they reach Claude.
 
@@ -63,23 +63,20 @@ Garmin's own guide: [Garmin Connect Personal API](https://developer.garmin.com/g
 
 ### 2. Deploy
 Click **Deploy to Cloudflare** above. It forks this repo into your GitHub, creates the KV
-namespace and deploys the Worker. Note the Worker's address, for example
-`https://garmin-mcp.<your-subdomain>.workers.dev`.
+namespace and deploys the Worker. You don't need to edit any files.
 
 Prefer doing it by hand? Fork the repo, then in Cloudflare go to **Workers & Pages → Create →
 Import a repository**, pick your fork, and set the deploy command to `npx wrangler deploy`.
 
-### 3. Set your two variables
-In your fork, edit `wrangler.jsonc`:
-- `ALLOWED_GITHUB_LOGIN`: your GitHub username
-- `PUBLIC_URL`: the Worker address from step 2
-
-Commit. Cloudflare redeploys on every push.
+### 3. Find your Worker's address
+Open the Worker's address, for example `https://garmin-mcp.<your-subdomain>.workers.dev`
+(Cloudflare shows it on the Worker's page). The page lists the exact callback URL and connector
+URL to copy in the next steps, and which secrets are still missing.
 
 ### 4. GitHub OAuth app
 GitHub → **Settings → Developer settings → OAuth Apps → New OAuth App**:
 - Homepage URL: your Worker address
-- Authorization callback URL: your Worker address + `/callback`
+- Authorization callback URL: the callback URL shown on your Worker's page (its address + `/callback`)
 - Leave wildcard matching and device flow off
 
 Copy the **Client ID**, and generate a **Client secret**.
@@ -89,13 +86,14 @@ Cloudflare → your Worker → **Settings → Variables and Secrets → Add**, t
 
 | Name | Value |
 |---|---|
+| `ALLOWED_GITHUB_LOGIN` | your GitHub username. Only this account can sign in |
 | `GARMIN_API_KEY` | from step 1 |
 | `GITHUB_CLIENT_ID` | from step 4 |
 | `GITHUB_CLIENT_SECRET` | from step 4 |
 
 ### 6. Connect Claude
 [claude.ai/customize/connectors](https://claude.ai/customize/connectors) → **Add custom
-connector** → URL: your Worker address + `/mcp` → **Connect** → approve → sign in with GitHub.
+connector** → URL: the connector URL shown on your Worker's page (its address + `/mcp`) → **Connect** → approve → sign in with GitHub.
 
 Start a new chat and ask: *"Summarise my last 7 days from Garmin."*
 
@@ -136,6 +134,13 @@ run `npx @modelcontextprotocol/inspector` and connect to `http://localhost:8787/
 Claude itself can't reach `localhost`, so deploy before connecting Claude.
 
 `npm run typecheck` checks the TypeScript.
+
+## Updating from an older copy
+
+Older versions had `ALLOWED_GITHUB_LOGIN` and `PUBLIC_URL` in `wrangler.jsonc`. After you update,
+add `ALLOWED_GITHUB_LOGIN` as a secret (step 5). Until you do, sign-in is refused. `PUBLIC_URL` is
+no longer needed; you can still set it under `vars` in `wrangler.jsonc` to pin one address if your
+Worker has a custom domain as well as `workers.dev`.
 
 ## Security notes
 

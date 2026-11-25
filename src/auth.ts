@@ -1,8 +1,10 @@
 import type { AuthRequest } from "@cloudflare/workers-oauth-provider";
 import type { Env, Props } from "./env";
+import { allowedLogin, publicOrigin } from "./env";
 
 // Login for MCP clients (Claude): the OAuth provider sends the user here, we show what is asking
 // for access, then sign them in with GitHub and only let ALLOWED_GITHUB_LOGIN through.
+// If ALLOWED_GITHUB_LOGIN isn't set, nobody gets through.
 
 const STATE_TTL_S = 600;
 const CSRF_COOKIE = "__Host-garmin_mcp_csrf";
@@ -35,7 +37,7 @@ function page(title: string, body: string, status = 200, headers: HeadersInit = 
 @media (prefers-color-scheme:dark){:root{--bg:#15171a;--card:#1e2125;--ink:#ecedef;--muted:#a2a7ae;--accent:#6cc28f}}
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,sans-serif;display:grid;place-items:center;min-height:100vh;padding:16px;box-sizing:border-box}
 main{background:var(--card);border-radius:14px;padding:24px;max-width:440px;width:100%}
-h1{font-size:1.3rem;margin:0 0 8px}p{color:var(--muted)}button{font:inherit;background:var(--accent);color:#fff;border:0;border-radius:8px;padding:10px 16px;cursor:pointer}
+h1{font-size:1.3rem;margin:0 0 8px}p{color:var(--muted)}code{font-size:.9em;word-break:break-all}button{font:inherit;background:var(--accent);color:#fff;border:0;border-radius:8px;padding:10px 16px;cursor:pointer}
 </style></head><body><main><h1>${esc(title)}</h1>${body}</main></body></html>`;
   return new Response(html, {
     status,
@@ -43,7 +45,26 @@ h1{font-size:1.3rem;margin:0 0 8px}p{color:var(--muted)}button{font:inherit;back
   });
 }
 
+/** The home page lists the exact addresses to paste into GitHub and Claude, and what is still missing. */
+function home(request: Request, env: Env): Response {
+  const origin = publicOrigin(request, env);
+  const missing = ["ALLOWED_GITHUB_LOGIN", "GARMIN_API_KEY", "GITHUB_CLIENT_ID", "GITHUB_CLIENT_SECRET"].filter(
+    (name) => !String(env[name as keyof Env] ?? "").trim(),
+  );
+  const setup = missing.length
+    ? `<p><b>Not set up yet.</b> Add these as secrets in Cloudflare (your Worker → Settings → Variables and Secrets):
+       ${missing.map((m) => `<code>${esc(m)}</code>`).join(", ")}.</p>`
+    : "<p>Set up. Only its owner can sign in.</p>";
+  return page(
+    "Garmin MCP",
+    `<p>Private MCP server.</p>${setup}
+     <p>GitHub OAuth app callback URL:<br><code>${esc(origin)}/callback</code></p>
+     <p>Claude connector URL:<br><code>${esc(origin)}/mcp</code></p>`,
+  );
+}
+
 async function showConsent(request: Request, env: Env): Promise<Response> {
+  if (!allowedLogin(env)) return page("Not set up", "<p>Set the <code>ALLOWED_GITHUB_LOGIN</code> secret first.</p>", 500);
   const authRequest = await env.OAUTH_PROVIDER.parseAuthRequest(request);
   const client = await env.OAUTH_PROVIDER.lookupClient(authRequest.clientId);
   if (!client) return page("Unknown app", "<p>This app isn't registered.</p>", 400);
@@ -113,7 +134,7 @@ async function callback(request: Request, env: Env): Promise<Response> {
     headers: { Authorization: `Bearer ${tokenJson.access_token}`, Accept: "application/vnd.github+json", "User-Agent": "garmin-mcp" },
   });
   const user = (await userRes.json().catch(() => ({}))) as { login?: string };
-  if (!user.login || user.login.toLowerCase() !== env.ALLOWED_GITHUB_LOGIN.toLowerCase()) {
+  if (!user.login || user.login.toLowerCase() !== allowedLogin(env)) {
     return page("Not allowed", "<p>This server only accepts its owner's GitHub account.</p>", 403);
   }
 
@@ -135,7 +156,7 @@ export const authHandler = {
       if (pathname === "/authorize" && request.method === "GET") return await showConsent(request, env);
       if (pathname === "/authorize" && request.method === "POST") return await approve(request, env);
       if (pathname === "/callback" && request.method === "GET") return await callback(request, env);
-      if (pathname === "/") return page("Garmin MCP", "<p>Private MCP server. Nothing to see here.</p>");
+      if (pathname === "/") return home(request, env);
     } catch (err) {
       console.error("auth error", err);
       return page("Something went wrong", "<p>Start again from Claude.</p>", 400);
