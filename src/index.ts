@@ -1,15 +1,17 @@
 import OAuthProvider from "@cloudflare/workers-oauth-provider";
 import { authHandler } from "./auth";
 import type { Env } from "./env";
+import { publicOrigin } from "./env";
 import { mcpHandler } from "./mcp";
 
-// The provider needs the Worker's public URL, which comes from the PUBLIC_URL variable,
-// so it is built on the first request and reused afterwards.
-let provider: OAuthProvider<Env> | undefined;
+// The provider advertises the Worker's own address in its OAuth metadata. That address is the one
+// the request came in on (or PUBLIC_URL, if set), so one provider is built per address and reused.
+// A Worker only receives requests for its own routes, so this is a short, fixed list.
+const providers = new Map<string, OAuthProvider<Env>>();
 
-function getProvider(env: Env): OAuthProvider<Env> {
+function getProvider(origin: string): OAuthProvider<Env> {
+  let provider = providers.get(origin);
   if (!provider) {
-    const origin = new URL(env.PUBLIC_URL).origin;
     // /mcp requires a valid OAuth access token; everything else (login pages, OAuth endpoints) is public.
     provider = new OAuthProvider<Env>({
       apiRoute: "/mcp",
@@ -25,13 +27,13 @@ function getProvider(env: Env): OAuthProvider<Env> {
         resource_name: "Garmin MCP",
       },
     });
+    providers.set(origin, provider);
   }
   return provider;
 }
 
 export default {
   fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-    if (!env.PUBLIC_URL) return Promise.resolve(new Response("PUBLIC_URL is not set", { status: 500 }));
-    return getProvider(env).fetch(request, env, ctx);
+    return getProvider(publicOrigin(request, env)).fetch(request, env, ctx);
   },
 } satisfies ExportedHandler<Env>;

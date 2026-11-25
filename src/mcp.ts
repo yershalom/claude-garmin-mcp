@@ -2,6 +2,7 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { WebStandardStreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/webStandardStreamableHttp.js";
 import { z } from "zod";
 import type { Env, Props } from "./env";
+import { allowedLogin } from "./env";
 import { garminGet, GarminError, type Query } from "./garmin";
 import { chunkRange, daySpan, MAX_CHUNK_DAYS, MAX_RANGE_DAYS, mergeChunks } from "./ranges";
 
@@ -150,7 +151,7 @@ function buildServer(env: Env): McpServer {
 /** Stateless MCP over Streamable HTTP. Reached only after the OAuth provider has validated the token. */
 export const mcpHandler = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext & { props?: Props }): Promise<Response> {
-    if (!ctx.props?.login || ctx.props.login.toLowerCase() !== env.ALLOWED_GITHUB_LOGIN.toLowerCase()) {
+    if (!ctx.props?.login || ctx.props.login.toLowerCase() !== allowedLogin(env)) {
       return new Response("Forbidden", { status: 403 });
     }
     const server = buildServer(env);

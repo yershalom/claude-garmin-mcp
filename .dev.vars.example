@@ -1,5 +1,5 @@
 # Copy to .dev.vars for local development:  cp .dev.vars.example .dev.vars
-# .dev.vars is git-ignored. Values here override wrangler.jsonc when you run `npm run dev`.
+# .dev.vars is git-ignored. Its values are used when you run `npm run dev`.
 
 # Garmin Connect personal API key: create one at https://connect.garmin.com/app/settings/personalApiToken
 GARMIN_API_KEY=
@@ -11,6 +11,3 @@ GITHUB_CLIENT_SECRET=
 
 # Your GitHub username: the only account allowed to sign in.
 ALLOWED_GITHUB_LOGIN=
-
-# Local address of the dev server.
-PUBLIC_URL=http://localhost:8787

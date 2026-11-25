@@ -7,18 +7,17 @@
   "workers_dev": true,
   "preview_urls": false,
   "observability": { "enabled": true },
-  "vars": {
-    // Your GitHub username. Only this account can sign in and connect Claude.
-    "ALLOWED_GITHUB_LOGIN": "your-github-username",
-    // This Worker's public address, no trailing slash, e.g. https://garmin-mcp.<your-subdomain>.workers.dev
-    "PUBLIC_URL": "https://garmin-mcp.your-subdomain.workers.dev"
-  },
+  // Nothing in this file needs editing. The Worker uses the address it is reached on, and your
+  // GitHub username is a secret (below), so it survives every redeploy.
   "kv_namespaces": [
     // No id needed: Wrangler and the Deploy button create the namespace on first deploy.
     { "binding": "OAUTH_KV" }
   ]
   // Secrets (set in the dashboard or with `npx wrangler secret put NAME`; never commit them):
+  //   ALLOWED_GITHUB_LOGIN  – your GitHub username, the only account allowed to sign in
   //   GARMIN_API_KEY        – Garmin Connect personal API key
   //   GITHUB_CLIENT_ID      – GitHub OAuth app client ID
   //   GITHUB_CLIENT_SECRET  – GitHub OAuth app client secret
+  // Optional: to pin one address when the Worker has several (say a custom domain and workers.dev),
+  // add  "vars": { "PUBLIC_URL": "https://your.domain" }  above.
 }
